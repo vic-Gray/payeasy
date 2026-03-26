@@ -1,5 +1,15 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Map};
+use soroban_sdk::{contract, contractimpl, contracttype, contracterror, Address, Env, Map};
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    /// Contract has already been initialized
+    AlreadyInitialized = 1,
+    /// Contract has not been initialized yet
+    NotInitialized = 2,
+}
 
 //RentEscrow defined already
 #[contracttype]
