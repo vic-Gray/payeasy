@@ -39,7 +39,15 @@ impl RentEscrowContract {
         env.storage().persistent().set(&DataKey::Amount, &amount);
     }
 
-    /// Update the escrow amount. Only callable by the stored landlord.
+    /// Update the escrow amount.
+    ///
+    /// Reads the stored landlord from persistent storage and verifies that
+    /// `caller` matches before allowing the write.
+    ///
+    /// # Arguments
+    /// * `env`        - The Soroban environment handle.
+    /// * `caller`     - The invoker's `Address`; must equal the stored landlord.
+    /// * `new_amount` - Replacement escrow amount in stroops (i128).
     pub fn set_amount(env: Env, caller: Address, new_amount: i128) {
         caller.require_auth();
         let landlord: Address = env.storage()
@@ -50,13 +58,30 @@ impl RentEscrowContract {
         env.storage().persistent().set(&DataKey::Amount, &new_amount);
     }
 
-    /// Placeholder - retrieval logic added in the next commit.
-    pub fn get_landlord(_env: Env) -> Address {
-        panic!("not implemented")
+    /// Retrieve the landlord address from persistent storage.
+    ///
+    /// Panics with a descriptive message if `initialize` has not been called.
+    ///
+    /// # Returns
+    /// The `Address` of the landlord stored during initialization.
+    pub fn get_landlord(env: Env) -> Address {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Landlord)
+            .expect("landlord not set; call initialize first")
     }
 
-    /// Placeholder - retrieval logic added in the next commit.
-    pub fn get_amount(_env: Env) -> i128 {
-        0
+    /// Retrieve the current escrow amount from persistent storage.
+    ///
+    /// Returns `0` if `initialize` has not yet been called, which is a safe
+    /// default for an unsigned integer-style amount field.
+    ///
+    /// # Returns
+    /// The escrowed amount in stroops as `i128`.
+    pub fn get_amount(env: Env) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Amount)
+            .unwrap_or(0)
     }
 }
