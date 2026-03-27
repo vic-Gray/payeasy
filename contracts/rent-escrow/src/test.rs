@@ -6,7 +6,7 @@ use soroban_sdk::{testutils::Address as _, Env};
 #[test]
 fn test_initialize() {
     let env = Env::default();
-    let contract_id = env.register_contract(None, RentEscrow);
+    let contract_id = env.register(RentEscrow, ());
     let client = RentEscrowClient::new(&env, &contract_id);
     
     let landlord = Address::generate(&env);
