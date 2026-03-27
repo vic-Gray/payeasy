@@ -92,17 +92,42 @@ impl RentEscrowContract {
         Ok(())
     }
 
-    /// Release total rent to the landlord if fully funded.
-    pub fn release(env: Env) -> Result<(), Error> {
+    /// Calculate the total amount funded by all roommates.
+    pub fn get_total_funded(env: Env) -> i128 {
         let escrow: RentEscrow = env.storage()
             .persistent()
             .get(&DataKey::Escrow)
             .expect("escrow not initialized");
 
-        let mut total_contributed: i128 = 0;
+        let mut total: i128 = 0;
         for (_, amount) in escrow.contributions.iter() {
-            total_contributed += amount;
+            total += amount;
         }
+        total
+    }
+
+    /// Check whether the total contributions meet or exceed the rent goal.
+    pub fn is_fully_funded(env: Env) -> bool {
+        let escrow: RentEscrow = env.storage()
+            .persistent()
+            .get(&DataKey::Escrow)
+            .expect("escrow not initialized");
+
+        let mut total: i128 = 0;
+        for (_, amount) in escrow.contributions.iter() {
+            total += amount;
+        }
+        total >= escrow.rent_amount
+    }
+
+    /// Release total rent to the landlord if fully funded.
+    pub fn release(env: Env) -> Result<(), Error> {
+        let total_contributed = Self::get_total_funded(env.clone());
+
+        let escrow: RentEscrow = env.storage()
+            .persistent()
+            .get(&DataKey::Escrow)
+            .expect("escrow not initialized");
 
         if total_contributed < escrow.rent_amount {
             return Err(Error::InsufficientFunding);
