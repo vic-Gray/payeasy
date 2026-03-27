@@ -1,3 +1,15 @@
+#![no_std]
+use soroban_sdk::{contract, contractimpl, contracttype, contracterror, Address, Env, Map};
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    /// Caller is not authorized to perform this action
+    Unauthorized = 1,
+    /// The escrow deadline has passed
+    Expired = 2,
+}
 ﻿#![no_std]
 use soroban_sdk::{contract, contractimpl, contracttype, contracterror, Address, Env, Map};
 
