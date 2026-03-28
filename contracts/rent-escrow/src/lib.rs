@@ -118,7 +118,7 @@ impl RentEscrowContract {
 
     /// Check whether the total contributions meet or exceed the rent goal.
     pub fn is_fully_funded(env: Env) -> bool {
-        let total_funded = Self::get_total_funded(env);
+        let total_funded = Self::get_total_funded(env.clone());
         let escrow: RentEscrow = env.storage()
             .persistent()
             .get(&DataKey::Escrow)

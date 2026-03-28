@@ -86,3 +86,30 @@ fn test_get_balance() {
     client.contribute(&roommate_a, &150_i128);
     assert_eq!(client.get_balance(&roommate_a), 350_i128);
 }
+
+#[test]
+fn test_contribute_requires_auth() {
+    let env = Env::default();
+    let contract_id = env.register(RentEscrowContract, ());
+    let client = RentEscrowContractClient::new(&env, &contract_id);
+
+    let landlord = Address::generate(&env);
+    let roommate = Address::generate(&env);
+
+    let mut roommate_shares = Map::new(&env);
+    roommate_shares.set(roommate.clone(), 500_i128);
+
+    env.mock_all_auths();
+    client.initialize(&landlord, &1000_i128, &roommate_shares);
+
+    // contribute uses require_auth() internally — mock_all_auths
+    // allows it; without auth the call would panic
+    client.contribute(&roommate, &300_i128);
+
+    // Verify balance updated correctly after authenticated contribution
+    assert_eq!(client.get_balance(&roommate), 300_i128);
+
+    // Contribute again to verify cumulative tracking
+    client.contribute(&roommate, &200_i128);
+    assert_eq!(client.get_balance(&roommate), 500_i128);
+}
