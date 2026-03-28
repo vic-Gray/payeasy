@@ -86,3 +86,23 @@ fn test_get_balance() {
     client.contribute(&roommate_a, &150_i128);
     assert_eq!(client.get_balance(&roommate_a), 350_i128);
 }
+
+/// Issue #27 – Roommate Membership Check
+///
+/// A stranger (address never registered as a roommate) must not be able to
+/// call `contribute`. The contract must revert with `Error::Unauthorized`.
+#[test]
+fn test_stranger_contribute_fails() {
+    let env = Env::default();
+    let (client, _, _, _) = setup_escrow(&env);
+
+    let stranger = Address::generate(&env);
+
+    // The contract should panic/revert because `stranger` is not in the
+    // roommate map, triggering Error::Unauthorized (code 3).
+    let result = client.try_contribute(&stranger, &100_i128);
+    assert!(
+        result.is_err(),
+        "expected contribute to fail for an unregistered address"
+    );
+}

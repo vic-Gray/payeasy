@@ -15,6 +15,8 @@ pub const DAY_IN_LEDGERS: u32 = 17280;
 pub enum Error {
     InvalidAmount = 1,
     InsufficientFunding = 2,
+    /// Caller is not a registered roommate in this escrow.
+    Unauthorized = 3,
 }
 
 /// Storage key definitions for persistent contract state.
@@ -93,7 +95,12 @@ impl RentEscrowContract {
             .get(&DataKey::Escrow)
             .expect("escrow not initialized");
 
-        let mut state = escrow.roommates.get(from.clone()).ok_or(Error::InvalidAmount)?;
+        // Verify the caller is a registered roommate before accepting any funds.
+        if !escrow.roommates.contains_key(from.clone()) {
+            return Err(Error::Unauthorized);
+        }
+
+        let mut state = escrow.roommates.get(from.clone()).unwrap();
         state.paid += amount;
         escrow.roommates.set(from.clone(), state);
 
