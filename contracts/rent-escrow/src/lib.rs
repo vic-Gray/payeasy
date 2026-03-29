@@ -28,10 +28,16 @@ pub enum DataKey {
     Deadline,
 }
 
+/// Tracks an individual roommate's rent obligation and payment progress.
+///
+/// Stored per-roommate in the escrow using `DataKey::Escrow` inside the
+/// `RentEscrow.roommates` map, keyed by the roommate's `Address`.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoommateState {
+    /// The roommate's expected rent share in token units (i128).
     pub expected: i128,
+    /// The cumulative amount the roommate has contributed so far (i128).
     pub paid: i128,
 }
 
