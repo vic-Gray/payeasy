@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/ui/app-shell";
+import { StellarAuthProvider } from "@/contexts/StellarAuthContext";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -31,7 +32,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <AppShell>{children}</AppShell>
+        <StellarAuthProvider>
+          <AppShell>{children}</AppShell>
+        </StellarAuthProvider>
       </body>
     </html>
   );
