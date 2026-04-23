@@ -78,6 +78,13 @@ export function hasExactShareAllocation(
   return Math.abs(sumRoommateShares(roommates) - total) <= AMOUNT_TOLERANCE;
 }
 
+export function formatFeeEstimate(feeXlm: string | null | undefined): string {
+  if (!feeXlm) {
+    return "Fee unavailable";
+  }
+  return `Estimated network fee: ~${feeXlm} XLM`;
+}
+
 export function validateEscrowStep(
   step: number,
   draft: EscrowFormDraft

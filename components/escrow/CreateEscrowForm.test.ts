@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   calculateRemainingAmount,
+  formatFeeEstimate,
   nextEscrowStep,
   previousEscrowStep,
   toLedgerTimestamp,
@@ -80,4 +81,17 @@ test("calculateRemainingAmount handles excess allocation", () => {
   ];
   const remaining = calculateRemainingAmount("1000", roommates);
   assert.equal(remaining, -100);
+});
+
+test("formatFeeEstimate renders the fee in the review step copy", () => {
+  assert.equal(
+    formatFeeEstimate("0.00001"),
+    "Estimated network fee: ~0.00001 XLM"
+  );
+});
+
+test("formatFeeEstimate falls back to 'Fee unavailable' when fee fetch fails", () => {
+  assert.equal(formatFeeEstimate(null), "Fee unavailable");
+  assert.equal(formatFeeEstimate(undefined), "Fee unavailable");
+  assert.equal(formatFeeEstimate(""), "Fee unavailable");
 });

@@ -1,16 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createEscrow } from "@/lib/mock/escrow";
 
 import { getExplorerLink, type ExplorerProvider } from "@/lib/stellar/explorer";
+import { getFeeStats } from "@/lib/stellar/queries";
 
 import { useFormDraft } from "@/hooks/useFormDraft";
 import { useBeforeUnload } from "@/hooks/useBeforeUnload";
 import RoommateInput from "./RoommateInput";
 import {
   calculateRemainingAmount,
+  formatFeeEstimate,
   hasExactShareAllocation,
   nextEscrowStep,
   previousEscrowStep,
@@ -153,9 +155,34 @@ export default function CreateEscrowForm({
   const [errors, setErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submission, setSubmission] = useState<SubmissionState | null>(null);
+  const [feeEstimateXlm, setFeeEstimateXlm] = useState<string | null>(null);
+  const [feeStatus, setFeeStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
 
   // Warn before unload if there are unsaved changes and we haven't submitted
   useBeforeUnload(isDirty && !submission);
+
+  useEffect(() => {
+    if (step !== 4) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setFeeStatus("loading");
+
+    getFeeStats("testnet", undefined, { signal: controller.signal })
+      .then((stats) => {
+        if (controller.signal.aborted) return;
+        setFeeEstimateXlm(stats.baseFeeXlm);
+        setFeeStatus("ready");
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setFeeEstimateXlm(null);
+        setFeeStatus("error");
+      });
+
+    return () => controller.abort();
+  }, [step]);
 
   const totalRoommateShares = useMemo(
     () => sumRoommateShares(draft.roommates),
@@ -470,6 +497,15 @@ export default function CreateEscrowForm({
                 ))}
               </ul>
             </div>
+
+            <p
+              data-testid="fee-estimate"
+              className={feeStatus === "error" ? "text-dark-500" : "text-dark-300"}
+            >
+              {feeStatus === "loading"
+                ? "Estimating network fee..."
+                : formatFeeEstimate(feeStatus === "ready" ? feeEstimateXlm : null)}
+            </p>
 
             {submission ? (
               <div className="rounded-xl border border-accent-500/40 bg-accent-500/10 p-4 text-accent-100 space-y-2">
