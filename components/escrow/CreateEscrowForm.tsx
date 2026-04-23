@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { getExplorerLink, type ExplorerProvider } from "@/lib/stellar/explorer";
+import { isValidStellarAddress } from "@/lib/stellar/validation";
 
 import RoommateInput from "./RoommateInput";
 import {
@@ -123,6 +124,16 @@ export default function CreateEscrowForm({
   const [errors, setErrors] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submission, setSubmission] = useState<SubmissionState | null>(null);
+
+  const hasInvalidAddress = useMemo(
+    () =>
+      draft.roommates.some((roommate) => {
+        const value = roommate.address.trim();
+        if (!value) return false;
+        return !isValidStellarAddress(value);
+      }),
+    [draft.roommates]
+  );
 
   const totalRoommateShares = useMemo(
     () => sumRoommateShares(draft.roommates),
@@ -474,7 +485,8 @@ export default function CreateEscrowForm({
           <button
             type="button"
             onClick={handleNext}
-            className="btn-primary !px-5 !py-2.5 !text-sm"
+            disabled={step === 3 && hasInvalidAddress}
+            className="btn-primary !px-5 !py-2.5 !text-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Continue
           </button>
