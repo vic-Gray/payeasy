@@ -9,6 +9,7 @@ import {
   getBalance,
   getTotalFunded,
   isFullyFunded,
+  getFeeStats,
   ContractQueryError,
   type QueryContext,
   type SorobanQueryClient,
@@ -231,6 +232,86 @@ test("throws ContractQueryError when retval cannot be parsed as bool", async () 
       assert.match(err.message, /Cannot parse bool/);
       return true;
     }
+  );
+});
+
+// ─── getFeeStats ──────────────────────────────────────────────────────────────
+
+function makeFetchStub(
+  impl: (url: string) => {
+    ok: boolean;
+    status: number;
+    json: () => Promise<unknown>;
+  }
+) {
+  const calls: string[] = [];
+  const fetchImpl = async (url: string) => {
+    calls.push(url);
+    return impl(url);
+  };
+  return { fetchImpl, calls };
+}
+
+test("getFeeStats returns base fee in stroops and XLM for a valid response", async () => {
+  const { fetchImpl, calls } = makeFetchStub(() => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ last_ledger_base_fee: "100" }),
+  }));
+
+  const stats = await getFeeStats("testnet", fetchImpl);
+
+  assert.equal(stats.baseFeeStroops, "100");
+  assert.equal(stats.baseFeeXlm, "0.00001");
+  assert.equal(calls[0], "https://horizon-testnet.stellar.org/fee_stats");
+});
+
+test("getFeeStats hits the mainnet Horizon URL when network=mainnet", async () => {
+  const { fetchImpl, calls } = makeFetchStub(() => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ last_ledger_base_fee: "100" }),
+  }));
+
+  await getFeeStats("mainnet", fetchImpl);
+
+  assert.equal(calls[0], "https://horizon.stellar.org/fee_stats");
+});
+
+test("getFeeStats converts larger stroop values to XLM correctly", async () => {
+  const { fetchImpl } = makeFetchStub(() => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ last_ledger_base_fee: "12345678" }),
+  }));
+
+  const stats = await getFeeStats("testnet", fetchImpl);
+  assert.equal(stats.baseFeeXlm, "1.2345678");
+});
+
+test("getFeeStats throws when Horizon returns a non-ok status", async () => {
+  const { fetchImpl } = makeFetchStub(() => ({
+    ok: false,
+    status: 503,
+    json: async () => ({}),
+  }));
+
+  await assert.rejects(
+    () => getFeeStats("testnet", fetchImpl),
+    /fee_stats request failed: 503/
+  );
+});
+
+test("getFeeStats throws when last_ledger_base_fee is missing", async () => {
+  const { fetchImpl } = makeFetchStub(() => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ ledger_capacity_usage: "0.1" }),
+  }));
+
+  await assert.rejects(
+    () => getFeeStats("testnet", fetchImpl),
+    /Invalid fee_stats response/
   );
 });
 

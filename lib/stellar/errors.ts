@@ -3,6 +3,71 @@
  * Centralized error handler that translates Stellar/Soroban errors into user-friendly messages.
  */
 
+// ─── Wallet-specific error codes ────────────────────────────────────────────
+
+export const WalletErrorCode = {
+  USER_DECLINED: "USER_DECLINED",
+  NOT_INSTALLED: "NOT_INSTALLED",
+  NETWORK_MISMATCH: "NETWORK_MISMATCH",
+  UNKNOWN: "UNKNOWN",
+} as const;
+
+export type WalletErrorCode = (typeof WalletErrorCode)[keyof typeof WalletErrorCode];
+
+export interface WalletError {
+  code: WalletErrorCode;
+  message: string;
+  help: string;
+}
+
+export const WALLET_ERROR_MESSAGES: Record<WalletErrorCode, WalletError> = {
+  [WalletErrorCode.USER_DECLINED]: {
+    code: WalletErrorCode.USER_DECLINED,
+    message: "You declined the connection request.",
+    help: "The Freighter popup appeared but was dismissed or rejected. Open the popup again and click 'Connect' to allow PayEasy access to your wallet.",
+  },
+  [WalletErrorCode.NOT_INSTALLED]: {
+    code: WalletErrorCode.NOT_INSTALLED,
+    message: "Freighter wallet is not installed.",
+    help: "PayEasy requires the Freighter browser extension to interact with the Stellar network. Visit freighter.app to install it, then refresh this page.",
+  },
+  [WalletErrorCode.NETWORK_MISMATCH]: {
+    code: WalletErrorCode.NETWORK_MISMATCH,
+    message: "Your wallet is on the wrong network.",
+    help: "PayEasy runs on Stellar Testnet. Open Freighter, go to Settings → Network, and switch to 'Testnet' before connecting.",
+  },
+  [WalletErrorCode.UNKNOWN]: {
+    code: WalletErrorCode.UNKNOWN,
+    message: "Something went wrong connecting your wallet.",
+    help: "An unexpected error occurred. Try refreshing the page or reconnecting your wallet. If the problem persists, check that Freighter is up to date.",
+  },
+};
+
+/**
+ * Maps a raw error from Freighter/wallet operations to a structured WalletError.
+ */
+export function getWalletError(error: unknown): WalletError {
+  const msg =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : typeof error === "string"
+      ? error.toLowerCase()
+      : "";
+
+  if (msg.includes("declined") || msg.includes("reject") || msg.includes("user rejected")) {
+    return WALLET_ERROR_MESSAGES[WalletErrorCode.USER_DECLINED];
+  }
+  if (msg.includes("not found") || msg.includes("not installed") || msg.includes("freighter extension not found")) {
+    return WALLET_ERROR_MESSAGES[WalletErrorCode.NOT_INSTALLED];
+  }
+  if (msg.includes("network") || msg.includes("mismatch") || msg.includes("wrong network")) {
+    return WALLET_ERROR_MESSAGES[WalletErrorCode.NETWORK_MISMATCH];
+  }
+  return WALLET_ERROR_MESSAGES[WalletErrorCode.UNKNOWN];
+}
+
+// ─── Soroban / Stellar error types ──────────────────────────────────────────
+
 export const StellarErrorType = {
   INVALID_AMOUNT: "InvalidAmount",
   INSUFFICIENT_FUNDING: "InsufficientFunding",

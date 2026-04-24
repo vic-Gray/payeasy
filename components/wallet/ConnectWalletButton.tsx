@@ -3,14 +3,15 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallet, LogOut, Copy, Check, ChevronDown, ExternalLink } from "lucide-react";
+import { Wallet, LogOut, Copy, Check, ChevronDown, ExternalLink, AlertCircle } from "lucide-react";
 import { useStellarAuth } from "@/context/StellarContext";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function ConnectWalletButton() {
-  const { publicKey, isConnected, connect, disconnect, isConnecting, isFreighterInstalled, isRestoring } = useStellarAuth();
+  const { publicKey, isConnected, connect, disconnect, isConnecting, isFreighterInstalled, isRestoring, error } = useStellarAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [errorExpanded, setErrorExpanded] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
@@ -62,20 +63,42 @@ export default function ConnectWalletButton() {
 
   if (!isConnected) {
     return (
-      <button
-        onClick={() => {
-          if (!isFreighterInstalled) {
-            router.push("/connect");
-          } else {
-            connect();
-          }
-        }}
-        disabled={isConnecting}
-        className="btn-primary !py-2.5 !px-5 !text-sm !rounded-lg flex items-center gap-2 group transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
-      >
-        <Wallet size={16} className="group-hover:rotate-12 transition-transform" />
-        {isConnecting ? "Connecting..." : "Connect Wallet"}
-      </button>
+      <div className="flex flex-col items-end gap-1">
+        <button
+          onClick={() => {
+            if (!isFreighterInstalled) {
+              router.push("/connect");
+            } else {
+              connect();
+            }
+          }}
+          disabled={isConnecting}
+          className="btn-primary !py-2.5 !px-5 !text-sm !rounded-lg flex items-center gap-2 group transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+        >
+          <Wallet size={16} className="group-hover:rotate-12 transition-transform" />
+          {isConnecting ? "Connecting..." : "Connect Wallet"}
+        </button>
+
+        {error && (
+          <div className="text-right max-w-[220px]">
+            <div className="flex items-center justify-end gap-1.5">
+              <AlertCircle size={12} className="text-red-400 shrink-0" />
+              <p className="text-xs text-red-400">{error.message}</p>
+            </div>
+            <button
+              onClick={() => setErrorExpanded((v) => !v)}
+              className="text-[11px] text-dark-500 hover:text-dark-300 transition-colors mt-0.5"
+            >
+              {errorExpanded ? "Hide details" : "What does this mean?"}
+            </button>
+            {errorExpanded && (
+              <p className="text-[11px] text-dark-500 leading-relaxed mt-1 border-l border-white/10 pl-2 text-left">
+                {error.help}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     );
   }
 

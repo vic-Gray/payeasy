@@ -7,6 +7,7 @@ import {
   getPublicKey as fetchPublicKey,
   checkConnection
 } from "@/lib/stellar/wallet";
+import { getWalletError, type WalletError } from "@/lib/stellar/errors";
 
 interface StellarContextType {
   publicKey: string | null;
@@ -16,7 +17,7 @@ interface StellarContextType {
   isRestoring: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
-  error: string | null;
+  error: WalletError | null;
 }
 
 const StellarContext = createContext<StellarContextType | undefined>(undefined);
@@ -27,7 +28,7 @@ export function StellarProvider({ children }: { children: React.ReactNode }) {
   const [isFreighterInstalled, setIsFreighterInstalled] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<WalletError | null>(null);
 
   // Initialize connection state
   useEffect(() => {
@@ -74,7 +75,7 @@ export function StellarProvider({ children }: { children: React.ReactNode }) {
         throw new Error("User rejected connection or failed to retrieve public key.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to connect wallet.");
+      setError(getWalletError(err));
       setIsConnected(false);
       setPublicKey(null);
     } finally {

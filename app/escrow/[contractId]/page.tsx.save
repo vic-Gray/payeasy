@@ -1,3 +1,4 @@
+const data = getContractState(contractId);
 import { Metadata } from "next";
 <<<<<<< HEAD
 import React, { useState, useEffect } from "react";

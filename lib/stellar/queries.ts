@@ -3,6 +3,7 @@
   );
 }
 
+<<<<<<< HEAD
 /**
  * Represents the full state of a rent escrow contract on-chain.
  */
@@ -159,3 +160,71 @@ export async function getAccountBalance(publicKey: string): Promise<number> {
   }
 }
 
+=======
+// ─── Horizon: fee stats ───────────────────────────────────────────────────────
+
+export interface FeeStats {
+  /** Base fee in stroops (smallest unit on Stellar; 1 XLM = 10^7 stroops). */
+  baseFeeStroops: string;
+  /** Base fee in XLM as a trimmed decimal string (e.g. "0.00001"). */
+  baseFeeXlm: string;
+}
+
+const FEE_STATS_HORIZON_URLS = {
+  testnet: "https://horizon-testnet.stellar.org",
+  mainnet: "https://horizon.stellar.org",
+} as const;
+
+export type FeeStatsNetwork = keyof typeof FEE_STATS_HORIZON_URLS;
+
+type FetchLike = (
+  input: string,
+  init?: { signal?: AbortSignal }
+) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+
+/**
+ * Fetches the current base network fee from Horizon `GET /fee_stats`.
+ * Used before submitting a transaction to show an estimated network fee.
+ *
+ * Throws on network failure, non-2xx response, or malformed payload so callers
+ * can decide how to present fallback UI (e.g. "Fee unavailable").
+ */
+export async function getFeeStats(
+  network: FeeStatsNetwork = "testnet",
+  fetchImpl: FetchLike = fetch as unknown as FetchLike,
+  options: { signal?: AbortSignal } = {}
+): Promise<FeeStats> {
+  const url = `${FEE_STATS_HORIZON_URLS[network]}/fee_stats`;
+
+  const response = await fetchImpl(url, { signal: options.signal });
+
+  if (!response.ok) {
+    throw new Error(`Horizon fee_stats request failed: ${response.status}`);
+  }
+
+  const data = (await response.json()) as { last_ledger_base_fee?: unknown };
+  const raw = data.last_ledger_base_fee;
+  const stroops =
+    typeof raw === "string" ? raw : typeof raw === "number" ? String(raw) : "";
+
+  if (!/^\d+$/.test(stroops)) {
+    throw new Error(
+      "Invalid fee_stats response: missing or non-numeric last_ledger_base_fee"
+    );
+  }
+
+  return {
+    baseFeeStroops: stroops,
+    baseFeeXlm: stroopsToXlm(stroops),
+  };
+}
+
+function stroopsToXlm(stroops: string): string {
+  const STROOPS_PER_XLM = BigInt(10_000_000);
+  const value = BigInt(stroops);
+  const whole = value / STROOPS_PER_XLM;
+  const fraction = value % STROOPS_PER_XLM;
+  const fractionStr = fraction.toString().padStart(7, "0").replace(/0+$/, "");
+  return fractionStr.length > 0 ? `${whole}.${fractionStr}` : whole.toString();
+}
+>>>>>>> 01f026e18f6dfa113c7628ddccfbe3b6bc0e1a89

@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { SUPPORTED_TOKENS } from "../../lib/stellar/config.ts";
+
 import {
   calculateRemainingAmount,
+  formatFeeEstimate,
   nextEscrowStep,
   previousEscrowStep,
   toLedgerTimestamp,
@@ -13,7 +16,7 @@ import {
 function baseDraft(): EscrowFormDraft {
   return {
     totalRent: "1200",
-    tokenId: "XLM",
+    tokenAddress: SUPPORTED_TOKENS[0].issuer,
     deadlineDate: "2026-04-01",
     roommates: [
       { id: "a", address: "GAAA", shareAmount: "700" },
@@ -38,7 +41,7 @@ test("deadline date converts to unix ledger timestamp", () => {
 test("step 1 validation blocks empty token and non-positive rent", () => {
   const draft = baseDraft();
   draft.totalRent = "0";
-  draft.tokenId = "";
+  draft.tokenAddress = "";
 
   const result = validateEscrowStep(1, draft);
   assert.equal(result.isValid, false);
@@ -80,4 +83,17 @@ test("calculateRemainingAmount handles excess allocation", () => {
   ];
   const remaining = calculateRemainingAmount("1000", roommates);
   assert.equal(remaining, -100);
+});
+
+test("formatFeeEstimate renders the fee in the review step copy", () => {
+  assert.equal(
+    formatFeeEstimate("0.00001"),
+    "Estimated network fee: ~0.00001 XLM"
+  );
+});
+
+test("formatFeeEstimate falls back to 'Fee unavailable' when fee fetch fails", () => {
+  assert.equal(formatFeeEstimate(null), "Fee unavailable");
+  assert.equal(formatFeeEstimate(undefined), "Fee unavailable");
+  assert.equal(formatFeeEstimate(""), "Fee unavailable");
 });

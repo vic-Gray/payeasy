@@ -2,6 +2,13 @@ import { rpc } from "@stellar/stellar-sdk";
 
 export type StellarNetwork = "testnet" | "mainnet";
 
+export interface SupportedToken {
+  symbol: string;
+  name: string;
+  assetCode: string;
+  issuer: string;
+}
+
 export interface NetworkConfig {
   network: StellarNetwork;
   rpcUrl: string;
@@ -39,6 +46,27 @@ export function getCurrentNetwork(): StellarNetwork {
 export function getNetworkConfig(): NetworkConfig {
   const network = getCurrentNetwork();
   return NETWORKS[network];
+}
+
+export const SUPPORTED_TOKENS: SupportedToken[] = [
+  {
+    symbol: "USDC",
+    name: "USD Coin",
+    assetCode: "USDC",
+    issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+  },
+  {
+    symbol: "EURC",
+    name: "Euro Coin",
+    assetCode: "EURC",
+    issuer: "GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO",
+  },
+];
+
+export function getSupportedTokenByIssuer(
+  issuer: string
+): SupportedToken | undefined {
+  return SUPPORTED_TOKENS.find((token) => token.issuer === issuer);
 }
 
 // Export a configured rpc.Server instance

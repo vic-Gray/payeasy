@@ -15,6 +15,7 @@ import {
   Loader2,
   LogOut,
   ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
 import { getExplorerLink } from "@/lib/stellar/explorer";
@@ -59,8 +60,6 @@ export default function ConnectWalletPage() {
   const [copied, setCopied] = useState(false);
   const [step, setStep] = useState<Step>("intro");
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
-  const [freighterNetwork, setFreighterNetwork] = useState<"TESTNET" | "MAINNET" | null>(null);
-  const [checkingNetwork, setCheckingNetwork] = useState(false);
 
   useEffect(() => {
     if (isConnected && publicKey) {
@@ -241,11 +240,32 @@ export default function ConnectWalletPage() {
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="w-full mt-4 glass-card p-4 flex items-start gap-3 border-red-500/20"
+                  className="w-full mt-4 glass-card p-4 border-red-500/20 space-y-2"
                   style={{ borderColor: "rgba(239,68,68,0.2)" }}
                 >
-                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                  <p className="text-red-300 text-sm">{error}</p>
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-red-300 text-sm flex-1">{error.message}</p>
+                  </div>
+                  <button
+                    onClick={() => setErrorExpanded((v) => !v)}
+                    className="flex items-center gap-1.5 text-xs text-dark-400 hover:text-dark-200 transition-colors ml-8"
+                  >
+                    <ChevronDown
+                      size={14}
+                      className={`transition-transform ${errorExpanded ? "rotate-180" : ""}`}
+                    />
+                    What does this mean?
+                  </button>
+                  {errorExpanded && (
+                    <motion.p
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="text-xs text-dark-400 leading-relaxed ml-8 border-l border-white/10 pl-3"
+                    >
+                      {error.help}
+                    </motion.p>
+                  )}
                 </motion.div>
               )}
 

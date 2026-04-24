@@ -1,16 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createEscrow } from "@/lib/mock/escrow";
 
+import { getSupportedTokenByIssuer } from "@/lib/stellar/config";
 import { getExplorerLink, type ExplorerProvider } from "@/lib/stellar/explorer";
+import { getFeeStats } from "@/lib/stellar/queries";
 
 import { useFormDraft } from "@/hooks/useFormDraft";
 import { useBeforeUnload } from "@/hooks/useBeforeUnload";
 import RoommateInput from "./RoommateInput";
+import { FieldError, fieldBorderClass } from "@/components/ui/field-error";
 import {
   calculateRemainingAmount,
+  formatFeeEstimate,
   hasExactShareAllocation,
   nextEscrowStep,
   previousEscrowStep,
@@ -23,7 +27,7 @@ import {
 
 interface InitializeEscrowParams {
   totalRent: string;
-  tokenId: string;
+  tokenAddress: string;
   deadlineLedgerTimestamp: number;
 }
 
@@ -151,11 +155,82 @@ export default function CreateEscrowForm({
   }, [draft]);
 
   const [errors, setErrors] = useState<string[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [roommateErrors, setRoommateErrors] = useState<Record<string, { address?: string; shareAmount?: string }>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submission, setSubmission] = useState<SubmissionState | null>(null);
+  const [feeEstimateXlm, setFeeEstimateXlm] = useState<string | null>(null);
+  const [feeStatus, setFeeStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+
+  function clearFieldError(field: string) {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function buildFieldErrors(step: number, draft: EscrowFormDraft): Record<string, string> {
+    const errs: Record<string, string> = {};
+    if (step === 1 || step === 4) {
+      if (!draft.totalRent || Number(draft.totalRent) <= 0) errs.totalRent = "Required";
+      if (!draft.tokenId.trim()) errs.tokenId = "Required";
+    }
+    if (step === 2 || step === 4) {
+      if (!toLedgerTimestamp(draft.deadlineDate)) errs.deadlineDate = "Set a valid deadline date.";
+    }
+    return errs;
+  }
+
+  function buildRoommateErrors(
+    roommates: RoommateInputValue[]
+  ): Record<string, { address?: string; shareAmount?: string }> {
+    const errs: Record<string, { address?: string; shareAmount?: string }> = {};
+    for (const r of roommates) {
+      const re: { address?: string; shareAmount?: string } = {};
+      if (!r.address.trim()) re.address = "Required";
+      if (!r.shareAmount || Number(r.shareAmount) <= 0) re.shareAmount = "Required";
+      if (Object.keys(re).length > 0) errs[r.id] = re;
+    }
+    return errs;
+  }
+
+  function clearRoommateError(roommateId: string, field: "address" | "shareAmount") {
+    setRoommateErrors((prev) => {
+      const entry = prev[roommateId];
+      if (!entry?.[field]) return prev;
+      const next = { ...prev, [roommateId]: { ...entry } };
+      delete next[roommateId][field];
+      return next;
+    });
+  }
 
   // Warn before unload if there are unsaved changes and we haven't submitted
   useBeforeUnload(isDirty && !submission);
+
+  useEffect(() => {
+    if (step !== 4) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setFeeStatus("loading");
+
+    getFeeStats("testnet", undefined, { signal: controller.signal })
+      .then((stats) => {
+        if (controller.signal.aborted) return;
+        setFeeEstimateXlm(stats.baseFeeXlm);
+        setFeeStatus("ready");
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setFeeEstimateXlm(null);
+        setFeeStatus("error");
+      });
+
+    return () => controller.abort();
+  }, [step]);
 
   const totalRoommateShares = useMemo(
     () => sumRoommateShares(draft.roommates),
@@ -168,6 +243,10 @@ export default function CreateEscrowForm({
   const deadlineLedgerTimestamp = useMemo(
     () => toLedgerTimestamp(draft.deadlineDate),
     [draft.deadlineDate]
+  );
+  const selectedToken = useMemo(
+    () => getSupportedTokenByIssuer(draft.tokenAddress),
+    [draft.tokenAddress]
   );
 
   const remainingAmount = useMemo(
@@ -204,18 +283,33 @@ export default function CreateEscrowForm({
   }
 
   function handleNext(): void {
-    const validation = validateEscrowStep(step, draft);
-    if (!validation.isValid) {
-      setErrors(validation.errors);
+    const fe = buildFieldErrors(step, draft);
+    if (Object.keys(fe).length > 0) {
+      setFieldErrors(fe);
       return;
     }
-
+    if (step === 3) {
+      const re = buildRoommateErrors(draft.roommates);
+      if (Object.keys(re).length > 0) {
+        setRoommateErrors(re);
+        return;
+      }
+      const validation = validateEscrowStep(step, draft);
+      if (!validation.isValid) {
+        setErrors(validation.errors);
+        return;
+      }
+    }
     setErrors([]);
+    setFieldErrors({});
+    setRoommateErrors({});
     setStep((current) => nextEscrowStep(current));
   }
 
   function handleBack(): void {
     setErrors([]);
+    setFieldErrors({});
+    setRoommateErrors({});
     setStep((current) => previousEscrowStep(current));
   }
 
@@ -244,6 +338,26 @@ export default function CreateEscrowForm({
       setIsSubmitting(true);
       setErrors([]);
 
+      const initializeResult = await activeClient.initialize({
+        totalRent: draft.totalRent,
+        tokenAddress: draft.tokenAddress.trim(),
+        deadlineLedgerTimestamp,
+      });
+
+      let lastMetadata = metadataFromResult(initializeResult);
+
+      for (const roommate of draft.roommates) {
+        const addRoommateResult = await addRoommateMethod({
+          roommateAddress: roommate.address.trim(),
+          shareAmount: roommate.shareAmount,
+        });
+
+        const roommateMetadata = metadataFromResult(addRoommateResult);
+        lastMetadata = {
+          ...lastMetadata,
+          ...roommateMetadata,
+        };
+      }
       // Call the mock service
       const result = await createEscrow();
       setSubmission(result);
@@ -331,7 +445,7 @@ export default function CreateEscrowForm({
       <div className="space-y-6">
         {step === 1 ? (
           <>
-            <div className="space-y-2">
+            <div className="space-y-1">
               <label htmlFor="total-rent" className="block text-sm text-dark-400">
                 Total Rent Amount
               </label>
@@ -341,18 +455,19 @@ export default function CreateEscrowForm({
                 min="0"
                 step="0.0000001"
                 value={draft.totalRent}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    totalRent: event.target.value,
-                  }))
-                }
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-dark-100 focus:border-brand-400 focus:outline-none"
+                onChange={(event) => {
+                  setDraft((current) => ({ ...current, totalRent: event.target.value }));
+                  if (event.target.value && Number(event.target.value) > 0) clearFieldError("totalRent");
+                }}
+                aria-describedby={fieldErrors.totalRent ? "total-rent-error" : undefined}
+                aria-invalid={!!fieldErrors.totalRent}
+                className={`w-full rounded-xl border bg-white/5 px-4 py-3 text-dark-100 focus:outline-none transition-colors ${fieldBorderClass(fieldErrors.totalRent, !!draft.totalRent && Number(draft.totalRent) > 0)}`}
                 placeholder="e.g. 1250"
               />
+              <FieldError id="total-rent-error" message={fieldErrors.totalRent} />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1">
               <label htmlFor="token-id" className="block text-sm text-dark-400">
                 Payment Token
               </label>
@@ -360,13 +475,13 @@ export default function CreateEscrowForm({
                 id="token-id"
                 list="token-options"
                 value={draft.tokenId}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    tokenId: event.target.value,
-                  }))
-                }
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-dark-100 focus:border-brand-400 focus:outline-none"
+                onChange={(event) => {
+                  setDraft((current) => ({ ...current, tokenId: event.target.value }));
+                  if (event.target.value.trim()) clearFieldError("tokenId");
+                }}
+                aria-describedby={fieldErrors.tokenId ? "token-id-error" : undefined}
+                aria-invalid={!!fieldErrors.tokenId}
+                className={`w-full rounded-xl border bg-white/5 px-4 py-3 text-dark-100 focus:outline-none transition-colors ${fieldBorderClass(fieldErrors.tokenId, !!draft.tokenId.trim())}`}
                 placeholder="XLM or contract ID"
               />
               <datalist id="token-options">
@@ -374,12 +489,13 @@ export default function CreateEscrowForm({
                 <option value="USDC" />
                 <option value="TEST:ISSUER" />
               </datalist>
+              <FieldError id="token-id-error" message={fieldErrors.tokenId} />
             </div>
           </>
         ) : null}
 
         {step === 2 ? (
-          <div className="space-y-2">
+          <div className="space-y-1">
             <label htmlFor="deadline-date" className="block text-sm text-dark-400">
               Escrow Deadline
             </label>
@@ -387,14 +503,15 @@ export default function CreateEscrowForm({
               id="deadline-date"
               type="date"
               value={draft.deadlineDate}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  deadlineDate: event.target.value,
-                }))
-              }
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-dark-100 focus:border-brand-400 focus:outline-none"
+              onChange={(event) => {
+                setDraft((current) => ({ ...current, deadlineDate: event.target.value }));
+                if (event.target.value) clearFieldError("deadlineDate");
+              }}
+              aria-describedby={fieldErrors.deadlineDate ? "deadline-date-error" : undefined}
+              aria-invalid={!!fieldErrors.deadlineDate}
+              className={`w-full rounded-xl border bg-white/5 px-4 py-3 text-dark-100 focus:outline-none transition-colors ${fieldBorderClass(fieldErrors.deadlineDate, !!draft.deadlineDate)}`}
             />
+            <FieldError id="deadline-date-error" message={fieldErrors.deadlineDate} />
             <p className="text-sm text-dark-500">
               Ledger timestamp: {deadlineLedgerTimestamp ?? "-"}
             </p>
@@ -413,6 +530,8 @@ export default function CreateEscrowForm({
                   onChange={handleRoommateChange}
                   onRemove={handleRoommateRemove}
                   disableRemove={draft.roommates.length === 1}
+                  errors={roommateErrors[roommate.id]}
+                  onClearError={clearRoommateError}
                 />
               ))}
             </div>
@@ -451,7 +570,16 @@ export default function CreateEscrowForm({
               <span className="text-dark-500">Total rent:</span> {draft.totalRent}
             </p>
             <p>
-              <span className="text-dark-500">Payment token:</span> {draft.tokenId}
+              <span className="text-dark-500">Payment token:</span>{" "}
+              {selectedToken
+                ? `${selectedToken.name} (${selectedToken.symbol})`
+                : draft.tokenAddress}
+            </p>
+            <p>
+              <span className="text-dark-500">Token issuer:</span>{" "}
+              <span className="break-all font-mono text-xs sm:text-sm">
+                {draft.tokenAddress}
+              </span>
             </p>
             <p>
               <span className="text-dark-500">Deadline date:</span> {draft.deadlineDate}
@@ -470,6 +598,15 @@ export default function CreateEscrowForm({
                 ))}
               </ul>
             </div>
+
+            <p
+              data-testid="fee-estimate"
+              className={feeStatus === "error" ? "text-dark-500" : "text-dark-300"}
+            >
+              {feeStatus === "loading"
+                ? "Estimating network fee..."
+                : formatFeeEstimate(feeStatus === "ready" ? feeEstimateXlm : null)}
+            </p>
 
             {submission ? (
               <div className="rounded-xl border border-accent-500/40 bg-accent-500/10 p-4 text-accent-100 space-y-2">
@@ -520,7 +657,8 @@ export default function CreateEscrowForm({
           <button
             type="button"
             onClick={handleNext}
-            className="btn-primary !px-5 !py-2.5 !text-sm"
+            disabled={step === 3 && hasInvalidAddress}
+            className="btn-primary !px-5 !py-2.5 !text-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Continue
           </button>

@@ -1,4 +1,4 @@
-import { getCurrentNetwork } from "./explorer";
+import { getCurrentNetwork } from "./explorer.ts";
 
 /**
  * Validates a Stellar public key (G... or C...).
